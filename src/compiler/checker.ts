@@ -108,6 +108,9 @@ namespace ts {
         // extra cost of calling `getParseTreeNode` when calling these functions from inside the
         // checker.
         const checker: TypeChecker = {
+            setSymbolChainCache: (cache: SymbolChainCache | undefined): void => {
+                nodeBuilder.setSymbolChainCache(cache);
+            },
             getNodeCount: () => sum(host.getSourceFiles(), "nodeCount"),
             getIdentifierCount: () => sum(host.getSourceFiles(), "identifierCount"),
             getSymbolCount: () => sum(host.getSourceFiles(), "symbolCount") + symbolCount,
@@ -3419,7 +3422,9 @@ namespace ts {
         }
 
         function createNodeBuilder() {
+            let symbolChainCache: SymbolChainCache | undefined;
             return {
+                setSymbolChainCache: (cache: SymbolChainCache | undefined): void => { symbolChainCache = cache },
                 typeToTypeNode: (type: Type, enclosingDeclaration?: Node, flags?: NodeBuilderFlags, tracker?: SymbolTracker) =>
                     withContext(enclosingDeclaration, flags, tracker, context => typeToTypeNodeHelper(type, context)),
                 indexInfoToIndexSignatureDeclaration: (indexInfo: IndexInfo, kind: IndexKind, enclosingDeclaration?: Node, flags?: NodeBuilderFlags, tracker?: SymbolTracker) =>
@@ -3435,7 +3440,7 @@ namespace ts {
                 symbolToParameterDeclaration: (symbol: Symbol, enclosingDeclaration?: Node, flags?: NodeBuilderFlags, tracker?: SymbolTracker) =>
                     withContext(enclosingDeclaration, flags, tracker, context => symbolToParameterDeclaration(symbol, context)),
                 typeParameterToDeclaration: (parameter: TypeParameter, enclosingDeclaration?: Node, flags?: NodeBuilderFlags, tracker?: SymbolTracker) =>
-                    withContext(enclosingDeclaration, flags, tracker, context => typeParameterToDeclaration(parameter, context)),
+                    withContext(enclosingDeclaration, flags, tracker, context => typeParameterToDeclaration(parameter, context))
             };
 
             function withContext<T>(enclosingDeclaration: Node | undefined, flags: NodeBuilderFlags | undefined, tracker: SymbolTracker | undefined, cb: (context: NodeBuilderContext) => T): T | undefined {
@@ -3449,6 +3454,7 @@ namespace ts {
                         getSourceFiles: () => host.getSourceFiles(),
                         getCurrentDirectory: host.getCurrentDirectory && (() => host.getCurrentDirectory!())
                     } : undefined },
+                    cache: symbolChainCache,
                     encounteredError: false,
                     visitedTypes: undefined,
                     symbolDepth: undefined,
@@ -4230,9 +4236,33 @@ namespace ts {
                     chain = [symbol];
                 }
                 return chain;
+               /** @param endOfChain Set to false for recursive calls; non-recursive calls should always output something. */
+                function getSymbolChain(symbol: Symbol, meaning: SymbolFlags, endOfChain: boolean): Symbol[] | undefined {
+                    let key: SymbolChainCacheKey | undefined;
+                    let result: Symbol[] | undefined;
+                    if (context.cache) {
+                        key = {
+                            symbol,
+                            enclosingDeclaration: context.enclosingDeclaration,
+                            flags: context.flags,
+                            meaning: meaning,
+                            yieldModuleSymbol: yieldModuleSymbol,
+                            endOfChain: endOfChain
+                        }
+                        result = context.cache.lookup(key);
+                        if (result) {
+                            return result;
+                        }
+                    }
+                    result = doGetSymbolChain(symbol, meaning, endOfChain);
+                    if (result && key && context.cache) {
+                        context.cache.cache(key, result);
+                    }
+                    return result;
+                }
 
                 /** @param endOfChain Set to false for recursive calls; non-recursive calls should always output something. */
-                function getSymbolChain(symbol: Symbol, meaning: SymbolFlags, endOfChain: boolean): Symbol[] | undefined {
+                function doGetSymbolChain(symbol: Symbol, meaning: SymbolFlags, endOfChain: boolean): Symbol[] | undefined {
                     let accessibleSymbolChain = getAccessibleSymbolChain(symbol, context.enclosingDeclaration, meaning, !!(context.flags & NodeBuilderFlags.UseOnlyExternalAliasing));
                     let parentSpecifiers: (string | undefined)[];
                     if (!accessibleSymbolChain ||
@@ -4629,6 +4659,7 @@ namespace ts {
             enclosingDeclaration: Node | undefined;
             flags: NodeBuilderFlags;
             tracker: SymbolTracker;
+            cache: SymbolChainCache | undefined;
 
             // State
             encounteredError: boolean;

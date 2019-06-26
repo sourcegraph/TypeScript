@@ -286,6 +286,7 @@ namespace ts {
         getCompletionEntrySymbol(fileName: string, position: number, name: string, source: string | undefined): Symbol | undefined;
 
         getQuickInfoAtPosition(fileName: string, position: number): QuickInfo | undefined;
+        getQuickInfoAtPosition(node: ts.Node, sourceFile?: ts.SourceFile): QuickInfo | undefined;
 
         getNameOrDottedNameSpan(fileName: string, startPos: number, endPos: number): TextSpan | undefined;
 
@@ -315,6 +316,7 @@ namespace ts {
         getNavigationTree(fileName: string): NavigationTree;
 
         getOutliningSpans(fileName: string): OutliningSpan[];
+        getOutliningSpans(sourceFile: ts.SourceFile): OutliningSpan[];
         getTodoComments(fileName: string, descriptors: TodoCommentDescriptor[]): TodoComment[];
         getBraceMatchingAtPosition(fileName: string, position: number): TextSpan[];
         getIndentationAtPosition(fileName: string, position: number, options: EditorOptions | EditorSettings): number;

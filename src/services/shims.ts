@@ -154,6 +154,7 @@ namespace ts {
         getCompletionEntryDetails(fileName: string, position: number, entryName: string, formatOptions: string/*Services.FormatCodeOptions*/ | undefined, source: string | undefined, preferences: UserPreferences | undefined): string;
 
         getQuickInfoAtPosition(fileName: string, position: number): string;
+        getQuickInfoAtPosition(node: ts.Node, sourceFile?: ts.SourceFile): string;
 
         getNameOrDottedNameSpan(fileName: string, startPos: number, endPos: number): string;
         getBreakpointStatementAtPosition(fileName: string, position: number): string;
@@ -245,6 +246,7 @@ namespace ts {
          * { textSpan: { start: number, length: number }; hintSpan: { start: number, length: number }; bannerText: string; autoCollapse: boolean } [] = [];
          */
         getOutliningSpans(fileName: string): string;
+        getOutliningSpans(sourceFile: ts.SourceFile): string;
 
         getTodoComments(fileName: string, todoCommentDescriptors: string): string;
 
@@ -741,10 +743,14 @@ namespace ts {
          * Computes a string representation of the type at the requested position
          * in the active file.
          */
-        public getQuickInfoAtPosition(fileName: string, position: number): string {
+        public getQuickInfoAtPosition(fileName: string, position: number): string;
+        public getQuickInfoAtPosition(node: ts.Node, sourceFile: ts.SourceFile | undefined): string;
+        public getQuickInfoAtPosition(arg0: string | ts.Node, arg1: number | ts.SourceFile | undefined): string {
+            const fileName = typeof arg0 === "string" ? arg0 : arg1 !== undefined ? (arg1 as ts.SourceFile).fileName : arg0.getSourceFile().fileName;
+            const position = typeof arg0 === "string" ? arg1 as number : arg0.getStart(arg1 as ts.SourceFile);
             return this.forwardJSONCall(
                 `getQuickInfoAtPosition('${fileName}', ${position})`,
-                () => this.languageService.getQuickInfoAtPosition(fileName, position)
+                () => this.languageService.getQuickInfoAtPosition(arg0 as any, arg1 as any)
             );
         }
 
@@ -1002,10 +1008,13 @@ namespace ts {
             );
         }
 
-        public getOutliningSpans(fileName: string): string {
+        public getOutliningSpans(fileName: string): string;
+        public getOutliningSpans(sourceFile: ts.SourceFile): string;
+        public getOutliningSpans(arg0: string | ts.SourceFile): string {
+            let fileName = typeof arg0 === "string" ? arg0 : arg0.fileName;
             return this.forwardJSONCall(
                 `getOutliningSpans('${fileName}')`,
-                () => this.languageService.getOutliningSpans(fileName)
+                () => this.languageService.getOutliningSpans(arg0 as any)
             );
         }
 
